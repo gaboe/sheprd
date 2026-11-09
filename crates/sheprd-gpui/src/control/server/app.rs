@@ -207,6 +207,11 @@ pub(super) fn window(call: Call<WindowOp>, cx: &mut App) -> Response {
                 windows: windows(cx),
             },
         },
+        WindowOp::Alerts => in_window(caller, cx, |view, _, _| Response::App {
+            reply: Reply::Alerts {
+                alerts: view.alert_infos(),
+            },
+        }),
         WindowOp::New { session } => {
             let target = match session {
                 Some(name) => {
@@ -318,6 +323,24 @@ pub(super) fn ui(call: Call<UiOp>, cx: &mut App) -> Response {
                 "Status bar shown"
             } else {
                 "Status bar hidden"
+            })
+        }
+        UiOp::MenuBar { switch } => {
+            if !crate::menus::IN_WINDOW {
+                return Response::error(
+                    ErrorCode::Unsupported,
+                    "macOS keeps the menus in the system's menu bar",
+                );
+            }
+            let visible = switch.apply(view.menu_bar_visible);
+            if visible != view.menu_bar_visible {
+                view.menu_bar_visible = visible;
+                cx.notify();
+            }
+            Response::done(if visible {
+                "Menu bar shown"
+            } else {
+                "Menu bar hidden"
             })
         }
         UiOp::FontSize { size } => {

@@ -255,37 +255,60 @@ impl SheprdWindow {
             if multi && endpoint.collapsed {
                 continue;
             }
-            let live = if selected { &self.live } else { &endpoint.live };
-            let Some(snapshot) = &live.snapshot else {
-                continue;
-            };
+            let sessions = self.sessions(endpoint_index);
             let collapsed_repos = if endpoint_index == 0 {
                 &self.collapsed_repos
             } else {
                 &endpoint.collapsed_repos
             };
             let host = multi.then_some(endpoint.label.as_str());
-            for (index, indented, _) in
-                visible_workspace_entries(&snapshot.workspaces, collapsed_repos)
+            let kept_front = self.kept_in_front();
+            // Herdr 1 numbers its workspaces in its own order; those the app
+            // keeps for Herdr 2 count on after them.
+            let rows: Vec<(
+                &sheprd_session::Session,
+                &sheprd_session::Workspace,
+                bool,
+                bool,
+            )> = sessions
+                .keyed()
+                .flat_map(|(keeper, session)| {
+                    let front = selected
+                        .then(|| {
+                            crate::session_model::Sessions::front_of(keeper, session, kept_front)
+                        })
+                        .flatten();
+                    visible_workspace_entries(&session.workspaces, collapsed_repos)
+                        .into_iter()
+                        .map(move |(index, indented, _)| {
+                            let workspace = &session.workspaces[index];
+                            (
+                                session,
+                                workspace,
+                                indented,
+                                front == Some(workspace.id.as_str()),
+                            )
+                        })
+                })
+                .collect();
+            for (position, (session, workspace, indented, focused)) in rows.into_iter().enumerate()
             {
-                let workspace = &snapshot.workspaces[index];
-                let id = workspace.workspace_id.clone();
+                let id = workspace.id.clone();
                 let key = format!("rail-workspace-{endpoint_id}-{id}");
                 let navigate_endpoint = endpoint_id.clone();
                 let context_endpoint = endpoint_id.clone();
                 let context_id = id.clone();
-                let focused = selected && workspace.focused;
-                let number = workspace.number.to_string();
+                let number = (position + 1).to_string();
                 let status = rail_workspace_status(
-                    &snapshot.workspaces,
-                    &snapshot.agents,
+                    &session.workspaces,
+                    &session.agents,
                     workspace,
                     collapsed_repos,
                     &self.config.sidebar_style.status_priority,
                 );
-                let muted = silenced.get(&endpoint_index).is_some_and(|silenced| {
-                    silenced.host() || silenced.workspace(&workspace.workspace_id)
-                });
+                let muted = silenced
+                    .get(&endpoint_index)
+                    .is_some_and(|silenced| silenced.host() || silenced.workspace(&workspace.id));
                 let marks = div()
                     .row()
                     .items_center()

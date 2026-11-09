@@ -24,20 +24,22 @@ fn find_ignores_case_and_measures_the_original_bytes() {
 }
 
 fn devices(snapshot: &ClientShellSnapshot) -> [Device<'_>; 2] {
+    // Leaked so the devices can borrow it as the sidebar's own sessions do;
+    // a test's few workspaces are all it holds.
+    let session: &'static Session =
+        Box::leak(Box::new(crate::session_model::of_snapshot(snapshot)));
     [
         Device {
             id: "local",
             label: "MacBook Pro",
-            workspaces: &snapshot.workspaces,
-            agents: &snapshot.agents,
+            sessions: vec![session],
             status_priority: &crate::config::DEFAULT_STATUS_PRIORITY,
             notes: None,
         },
         Device {
             id: "studio",
             label: "studio.lan",
-            workspaces: &[],
-            agents: &[],
+            sessions: Vec::new(),
             status_priority: &crate::config::DEFAULT_STATUS_PRIORITY,
             notes: None,
         },

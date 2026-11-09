@@ -11,6 +11,7 @@ pub enum AppCommand {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum WindowCommand {
     List,
+    Alerts,
     New {
         session: Option<String>,
     },
@@ -28,6 +29,7 @@ pub enum WindowCommand {
 pub enum UiCommand {
     Sidebar(Switch),
     StatusBar(Switch),
+    MenuBar(Switch),
     FontSize(FontSize),
     /// The activity bar section to show.
     Panel(crate::sidebar::ActivityPanel),
@@ -56,6 +58,7 @@ pub(super) fn window(args: &mut Args) -> Result<WindowCommand, CliError> {
     };
     Ok(match verb.to_str() {
         Some("list") => WindowCommand::List,
+        Some("alerts") => WindowCommand::Alerts,
         Some("new") => WindowCommand::New {
             session: args.text_option("--session")?,
         },
@@ -90,11 +93,12 @@ const PANELS: &str =
 pub(super) fn ui(args: &mut Args) -> Result<UiCommand, CliError> {
     let verb = args.verb().ok_or(CliError::MissingArgument {
         command: "ui",
-        what: "sidebar|statusbar|font-size|panel|agent-group",
+        what: "sidebar|statusbar|menubar|font-size|panel|agent-group",
     })?;
     Ok(match verb.to_str() {
         Some("sidebar") => UiCommand::Sidebar(switch(args.positional())?),
         Some("statusbar" | "status-bar") => UiCommand::StatusBar(switch(args.positional())?),
+        Some("menubar" | "menu-bar") => UiCommand::MenuBar(switch(args.positional())?),
         Some("panel") => {
             let name = args.required_text(PANELS)?;
             UiCommand::Panel(

@@ -71,7 +71,7 @@ fn sort_label(sort: AgentSort) -> String {
 }
 
 /// The configured status order, then the most recent change within a status.
-pub(super) fn status_priority(status: AgentStatus, priority: &[AgentStatus]) -> u8 {
+pub(crate) fn status_priority(status: AgentStatus, priority: &[AgentStatus]) -> u8 {
     if status == AgentStatus::Unknown {
         return 0;
     }

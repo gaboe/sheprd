@@ -15,7 +15,8 @@ use crate::{
 use gpui::{
     App, AppContext as _, Context, Entity, KeyDownEvent, ScrollHandle, Subscription, Window,
 };
-use sheprd_client::protocol::{AgentStatus, ClientShellAgent, ClientShellWorkspace};
+use sheprd_client::protocol::AgentStatus;
+use sheprd_session::Session;
 use std::ops::Range;
 use unicode_segmentation::UnicodeSegmentation;
 
@@ -107,8 +108,9 @@ pub(super) struct Hit {
 pub(super) struct Device<'a> {
     pub id: &'a str,
     pub label: &'a str,
-    pub workspaces: &'a [ClientShellWorkspace],
-    pub agents: &'a [ClientShellAgent],
+    /// Its sessions: Herdr 1's, then Herdr 2's.
+    pub sessions: Vec<&'a Session>,
+    /// The order a workspace's agents' statuses rank in.
     pub status_priority: &'a [AgentStatus],
     pub notes: Option<&'a crate::worktree_notes::Notes>,
 }
@@ -131,7 +133,11 @@ pub(super) fn search(query: &str, devices: &[Device<'_>]) -> Vec<Hit> {
         if room(&found)
             && let Some(range) = find(device.label, query)
         {
-            let count = device.workspaces.len();
+            let count: usize = device
+                .sessions
+                .iter()
+                .map(|session| session.workspaces.len())
+                .sum();
             found.push(Hit {
                 kind: Kind::Device,
                 target: Target::Device {
@@ -144,13 +150,18 @@ pub(super) fn search(query: &str, devices: &[Device<'_>]) -> Vec<Hit> {
             });
         }
         // Use sidebar grouping and labels, including children of collapsed groups.
-        for (index, child) in workspace_entries(device.workspaces) {
-            let workspace = &device.workspaces[index];
+        let entries = device.sessions.iter().flat_map(|session| {
+            workspace_entries(&session.workspaces)
+                .into_iter()
+                .map(move |(index, child)| (*session, &session.workspaces[index], child))
+        });
+        for (session, workspace, child) in entries {
+            let status = workspace_status(workspace, &session.agents, device.status_priority);
             let label = workspace_label(workspace, child);
             let branch = workspace.branch.as_deref().unwrap_or_default();
             let target = || Target::Workspace {
                 endpoint: device.id.to_owned(),
-                workspace: workspace.workspace_id.clone(),
+                workspace: workspace.id.clone(),
             };
             if room(&worktrees)
                 && let Some(range) = find(label, query)
@@ -161,11 +172,7 @@ pub(super) fn search(query: &str, devices: &[Device<'_>]) -> Vec<Hit> {
                     text: label.to_owned(),
                     range,
                     context: place(device, branch),
-                    status: Some(workspace_status(
-                        workspace,
-                        device.agents,
-                        device.status_priority,
-                    )),
+                    status: Some(status),
                 });
             }
             if room(&branches)
@@ -177,11 +184,7 @@ pub(super) fn search(query: &str, devices: &[Device<'_>]) -> Vec<Hit> {
                     text: branch.to_owned(),
                     range,
                     context: place(device, label),
-                    status: Some(workspace_status(
-                        workspace,
-                        device.agents,
-                        device.status_priority,
-                    )),
+                    status: Some(status),
                 });
             }
             if room(&notes)
@@ -272,30 +275,20 @@ impl SheprdWindow {
             return Vec::new();
         };
         let notes = crate::worktree_notes::Notes::of(cx);
-        let devices: Vec<_> = self
+        let listed: Vec<_> = self
             .displayed_devices()
             .into_iter()
             .filter(|(_, endpoint)| self.device_visible(&endpoint.id))
-            .map(|(index, endpoint)| {
-                let live = if index == self.selected_endpoint {
-                    &self.live
-                } else {
-                    &endpoint.live
-                };
-                Device {
-                    id: &endpoint.id,
-                    label: &endpoint.label,
-                    workspaces: live
-                        .snapshot
-                        .as_deref()
-                        .map_or(&[], |snapshot| &snapshot.workspaces),
-                    agents: live
-                        .snapshot
-                        .as_deref()
-                        .map_or(&[], |snapshot| &snapshot.agents),
-                    status_priority: &self.config.sidebar_style.status_priority,
-                    notes,
-                }
+            .map(|(index, endpoint)| (endpoint, self.sessions(index)))
+            .collect();
+        let devices: Vec<_> = listed
+            .iter()
+            .map(|(endpoint, sessions)| Device {
+                id: &endpoint.id,
+                label: &endpoint.label,
+                sessions: sessions.each().collect(),
+                status_priority: &self.config.sidebar_style.status_priority,
+                notes,
             })
             .collect();
         search(query, &devices)

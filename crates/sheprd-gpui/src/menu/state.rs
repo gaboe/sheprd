@@ -153,6 +153,8 @@ pub(crate) struct MenuState {
     pub(crate) palette_resume: Option<crate::palette::Resume>,
     pub(crate) code_search: Option<crate::code_search::CodeSearch>,
     pub(crate) close: Option<crate::close_modal::CloseConfirmation>,
+    /// A herdr-core tab's or pane's menu.
+    pub(crate) core: Option<crate::core_terminals::menu::CoreMenu>,
     pub(crate) tab: Option<crate::tab_menu::TabMenu>,
     pub(crate) group: Option<crate::group_menu::GroupMenu>,
     pub(crate) host: Option<super::devices::HostMenu>,
@@ -188,6 +190,8 @@ pub(crate) struct MenuState {
     pub(super) github_toasted: std::collections::HashSet<String>,
     /// The GitLab page's instances, fields, and work under way.
     pub(crate) gitlab: super::gitlab::GitLabMenu,
+    /// The Azure DevOps page's organizations, fields, and work under way.
+    pub(crate) azure: super::azure::AzureMenu,
     /// Saved devices whose removal is running, by endpoint ID. Kept after
     /// success until the catalog drops the device, so its header pulses
     /// until it disappears; the confirmation closes as soon as it starts.
@@ -429,12 +433,14 @@ impl MenuState {
             github_token: None,
             github_toasted: Default::default(),
             gitlab: Default::default(),
+            azure: Default::default(),
             removing_devices: Default::default(),
             github_selected: None,
             github_scroll: ScrollHandle::new(),
             pr_connection: None,
             version_notice: None,
             tab: None,
+            core: None,
             group: None,
             host: None,
             pane: None,
@@ -474,6 +480,7 @@ impl MenuState {
         self.usage_scroll.set_offset(Point::default());
         self.opening_right_click = false;
         self.tab = None;
+        self.core = None;
         self.group = None;
         self.host = None;
         self.pane = None;
@@ -494,6 +501,7 @@ impl MenuState {
         self.gitlab.connecting = None;
         self.gitlab.form = false;
         self.gitlab.stop_lookups();
+        self.azure.stop_lookups();
         self.page = None;
         if let Some(palette) = self.palette.take() {
             self.palette_resume = Some(palette.resume());

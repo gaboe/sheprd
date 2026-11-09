@@ -106,6 +106,11 @@ Herdr must know the agent's session, which takes its integration: run
 `herdr integration install claude` (or `codex`, `copilot`, `opencode`), then
 restart the agent. Without it the move is refused and the agent keeps running.
 
+Sheprd Remote on a phone offers the same move as **Move Agent into Chat** in a
+terminal tab's menu, for agents on the computer it is paired with, and opens
+the chat once it is up. In a Herdr 2 terminal it moves Claude Code, through
+the same herdr-core path as the desktop (`sheprd_core_client::convert`).
+
 The tab's menu offers the row for an agent that can move, on a host chats reach,
 and shows a refusal in the menu. In a tab with several such agents it moves the
 one in the focused pane, else the first; use `--pane` to choose another.
@@ -259,15 +264,41 @@ whole-file write, the card shows the written text and counts its lines without
 claiming any were removed. Changes too large to compare show their text before
 and after. A tool the app doesn't know keeps its own name.
 
-## Sub-agents and background shells
+A running call updates in place. Native Codex shows a command's output as it
+prints, pi shows each partial result its tools report, and Claude Code shows how
+long a tool has run and what its background tasks report, though a Claude
+command's own output still arrives with its result. The final output replaces
+what streamed, and other ACP agents show whatever updates they send. A chat
+following an existing CLI session can only show what that CLI saves to its log.
 
-When the agent hands a task to a sub-agent or leaves a command running in the
-background, the row above the composer says so after what the agent is doing,
-such as `Writing… 12s · 2 sub-agents · 1 background shell`. A background shell
-outlives the turn that started it, so once the agent is idle the row keeps
-saying what still runs (`1 background shell still running`) and clears when
-everything has ended. Click it for a table of each one: what it is, how long it
-has run or ran, and whether it is running, done, failed, or stopped.
+## Sub-agents, background shells, and monitors
+
+When the agent hands a task to a sub-agent, leaves a command running in the
+background, or starts a monitor, the row above the composer says so after what
+the agent is doing, such as `Writing… 12s · 2 sub-agents · 1 background shell`.
+A background shell outlives the turn that started it, so once the agent is idle
+the row keeps saying what still runs (`1 background shell still running`) and
+clears when everything has ended.
+
+The rail beside the conversation lists each one under **Sub-agents**,
+**Shells**, or **Monitors**, running work first with how long it has run and
+its latest step, and what ended folded under **N ended**. Click a row to go to
+its card. Hover a running row and its time becomes a Stop button, which ends
+that one piece of work at once, without asking, and leaves the turn running.
+Only work the agent can really stop offers it: Claude's sub-agents, shells, and
+monitors once Claude has named them, and Codex's sub-agents. Codex offers no
+way to stop a command inside a thread, so its shells have no Stop, and Copilot's
+and OpenCode's sub-agents are listed without one, as ACP has no request for it.
+Gemini and Pi report none of this, so these sections stay away.
+
+Every rail section folds to one line. While anything runs, **Plan** and
+**Changed** fold on their own to leave room, showing the current step and the
+change totals; once nothing runs they open again. Clicking a section's header
+overrides that for as long as the chat is open.
+
+When the rail is hidden or the pane is too narrow for it, click the row above
+the composer for a table instead: what each one is, how long it has run or ran,
+and whether it is running, done, failed, or stopped.
 
 A sub-agent's call is marked **Sub-agent** in the conversation, with the number
 of steps it took; open it to list them. Its steps stay in its card rather than
@@ -356,6 +387,12 @@ The choice belongs to this pane and is bounded when the window shrinks. The
 original editor's cursor remains visible even if it needs more rows than chosen.
 Unusual full-screen dialogs may require the terminal view.
 Leaving the agent returns to the ordinary terminal.
+
+Until the first transcript arrives, a loading view covers the old terminal
+output and leaves the original editor below it usable. **Use terminal** dismisses
+it and keeps the terminal once the conversation is ready; **Show chat** then
+brings the conversation back. A question or approval is never covered, and a
+session that cannot be found or read leaves the ordinary terminal in place.
 
 CLI logs keep only a tool's name and arguments, so the reader takes the command,
 file, search term, or task from the arguments of the tools it knows.

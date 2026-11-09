@@ -72,14 +72,14 @@ fn default_and_custom_orders_rank_agents_and_unknown_is_last() {
 
 #[test]
 fn default_workspace_status_matches_daemon_and_custom_uses_matching_agents() {
-    let snapshot = mixed_snapshot();
-    let workspace = &snapshot.workspaces[0];
+    let session = crate::session_model::of_snapshot(&mixed_snapshot());
+    let workspace = &session.workspaces[0];
     assert_eq!(
-        workspace_status(workspace, &snapshot.agents, &DEFAULT_STATUS_PRIORITY),
+        workspace_status(workspace, &session.agents, &DEFAULT_STATUS_PRIORITY),
         AgentStatus::Done
     );
     assert_eq!(
-        workspace_status(workspace, &snapshot.agents, &custom_priority()),
+        workspace_status(workspace, &session.agents, &custom_priority()),
         AgentStatus::Working
     );
     assert_eq!(
@@ -90,7 +90,7 @@ fn default_workspace_status_matches_daemon_and_custom_uses_matching_agents() {
     assert_eq!(
         workspace_status(
             workspace,
-            std::slice::from_ref(&snapshot.agents[1]),
+            std::slice::from_ref(&session.agents[1]),
             &custom_priority(),
         ),
         AgentStatus::Done,
@@ -108,13 +108,14 @@ fn collapsed_workspace_and_compact_rail_roll_up_child_agents_by_priority() {
     snapshot.agents[0].workspace_id = child_id;
     snapshot.agents[0].agent_status = AgentStatus::Working;
     snapshot.agents[1].agent_status = AgentStatus::Blocked;
+    let session = crate::session_model::of_snapshot(&snapshot);
     let collapsed = HashSet::from([layout_tests::REPO_KEY.to_owned()]);
-    let parent = &snapshot.workspaces[3];
+    let parent = &session.workspaces[3];
     let priority = custom_priority();
     assert_eq!(
         displayed_workspace_status(
-            &snapshot.workspaces,
-            &snapshot.agents,
+            &session.workspaces,
+            &session.agents,
             parent,
             &collapsed,
             &priority,
@@ -123,8 +124,8 @@ fn collapsed_workspace_and_compact_rail_roll_up_child_agents_by_priority() {
     );
     assert_eq!(
         displayed_sidebar_workspace_status(
-            &snapshot.workspaces,
-            &snapshot.agents,
+            &session.workspaces,
+            &session.agents,
             parent,
             &collapsed,
             true,
@@ -134,8 +135,8 @@ fn collapsed_workspace_and_compact_rail_roll_up_child_agents_by_priority() {
     );
     assert_eq!(
         rail_workspace_status(
-            &snapshot.workspaces,
-            &snapshot.agents,
+            &session.workspaces,
+            &session.agents,
             parent,
             &collapsed,
             &priority,
@@ -144,8 +145,8 @@ fn collapsed_workspace_and_compact_rail_roll_up_child_agents_by_priority() {
     );
     assert_eq!(
         rail_workspace_status(
-            &snapshot.workspaces,
-            &snapshot.agents,
+            &session.workspaces,
+            &session.agents,
             parent,
             &collapsed,
             &DEFAULT_STATUS_PRIORITY,
@@ -159,12 +160,13 @@ fn default_order_keeps_the_base_inline_false_collapsed_path() {
     let mut snapshot = layout_tests::snapshot(6);
     snapshot.workspaces[3].agent_status = AgentStatus::Idle;
     snapshot.workspaces[4].agent_status = AgentStatus::Blocked;
+    let session = crate::session_model::of_snapshot(&snapshot);
     let collapsed = HashSet::from([layout_tests::REPO_KEY.to_owned()]);
-    let parent = &snapshot.workspaces[3];
+    let parent = &session.workspaces[3];
     assert_eq!(
         displayed_sidebar_workspace_status(
-            &snapshot.workspaces,
-            &snapshot.agents,
+            &session.workspaces,
+            &session.agents,
             parent,
             &collapsed,
             false,
@@ -176,13 +178,12 @@ fn default_order_keeps_the_base_inline_false_collapsed_path() {
 
 #[test]
 fn workspace_search_uses_custom_status_priority() {
-    let snapshot = mixed_snapshot();
+    let session = crate::session_model::of_snapshot(&mixed_snapshot());
     let custom = custom_priority();
     let device = Device {
         id: "local",
         label: "MacBook Pro",
-        workspaces: &snapshot.workspaces,
-        agents: &snapshot.agents,
+        sessions: vec![&session],
         status_priority: &custom,
         notes: None,
     };

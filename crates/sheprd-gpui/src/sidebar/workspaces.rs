@@ -14,17 +14,18 @@ use super::{
     row::{Counts, PrBadge, first_text},
 };
 use crate::config::{ChangeCounts, Theme};
-use sheprd_client::protocol::{AgentStatus, ClientShellAgent, ClientShellWorkspace};
+use sheprd_client::protocol::AgentStatus;
+use sheprd_session::{Agent, Workspace};
 use std::collections::{HashMap, HashSet};
 
 /// The repositories that form a group: those with at least one parent and at
 /// least one linked worktree among `workspaces`.
-pub(super) fn grouped_keys(workspaces: &[ClientShellWorkspace]) -> HashSet<&str> {
+pub(super) fn grouped_keys(workspaces: &[Workspace]) -> HashSet<&str> {
     let mut kinds = HashMap::<&str, (bool, bool)>::new();
     for tree in workspaces.iter().filter_map(|w| w.worktree.as_ref()) {
         let (parent, linked) = kinds.entry(&tree.key).or_default();
-        *parent |= !tree.is_linked_worktree;
-        *linked |= tree.is_linked_worktree;
+        *parent |= !tree.linked;
+        *linked |= tree.linked;
     }
     kinds
         .into_iter()
@@ -35,7 +36,7 @@ pub(super) fn grouped_keys(workspaces: &[ClientShellWorkspace]) -> HashSet<&str>
 
 /// Display order as `(index, child)`. A group shows where its earliest member
 /// sits: all its parents first, in daemon order, then its linked worktrees.
-pub(crate) fn workspace_entries(workspaces: &[ClientShellWorkspace]) -> Vec<(usize, bool)> {
+pub(crate) fn workspace_entries(workspaces: &[Workspace]) -> Vec<(usize, bool)> {
     let grouped = grouped_keys(workspaces);
     let mut members = HashMap::<&str, (Vec<usize>, Vec<usize>)>::new();
     for (index, workspace) in workspaces.iter().enumerate() {
@@ -45,7 +46,7 @@ pub(crate) fn workspace_entries(workspaces: &[ClientShellWorkspace]) -> Vec<(usi
             .filter(|tree| grouped.contains(tree.key.as_str()))
         {
             let (parents, children) = members.entry(&tree.key).or_default();
-            if tree.is_linked_worktree {
+            if tree.linked {
                 children.push(index);
             } else {
                 parents.push(index);
@@ -74,7 +75,7 @@ pub(crate) fn workspace_entries(workspaces: &[ClientShellWorkspace]) -> Vec<(usi
 /// Visible rows as `(index, child, group)`: `group` names the repository a
 /// parent row folds, on every parent of a group.
 pub(super) fn visible_workspace_entries(
-    workspaces: &[ClientShellWorkspace],
+    workspaces: &[Workspace],
     collapsed: &HashSet<String>,
 ) -> Vec<(usize, bool, Option<String>)> {
     let grouped = grouped_keys(workspaces);
@@ -104,7 +105,7 @@ pub(super) fn visible_workspace_entries(
 /// or not it is selected, and is `None` for a device whose pull requests are
 /// not looked up. Any workspace, Git checkout or not, carries its muted mark.
 pub(super) fn workspace_badge(
-    workspace: &ClientShellWorkspace,
+    workspace: &Workspace,
     pr: Option<(&crate::pull_request::Cache, &crate::pull_request::View)>,
     git: (Option<&crate::git::Git>, ChangeCounts),
     marks: (&crate::teleport::Marks, &str),
@@ -152,7 +153,7 @@ pub(super) fn workspace_badge(
 
 /// The note the user keeps on a workspace's checkout, if it has one.
 pub(super) fn workspace_note<'a>(
-    workspace: &ClientShellWorkspace,
+    workspace: &Workspace,
     notes: Option<&'a crate::worktree_notes::Notes>,
     endpoint: &str,
 ) -> Option<&'a str> {
@@ -163,22 +164,38 @@ pub(super) fn workspace_note<'a>(
     )
 }
 
-pub(crate) fn workspace_label(workspace: &ClientShellWorkspace, indented: bool) -> &str {
-    let branch = (indented && !workspace.custom_label)
-        .then_some(workspace.branch.as_deref())
+pub(crate) fn workspace_label(workspace: &Workspace, indented: bool) -> &str {
+    label_of(
+        &workspace.label,
+        workspace.branch.as_deref(),
+        workspace.custom_label,
+        indented,
+    )
+}
+
+/// A workspace's row name from its parts: a linked worktree's row shows its
+/// branch unless the user named it.
+pub(crate) fn label_of<'a>(
+    label: &'a str,
+    branch: Option<&'a str>,
+    custom_label: bool,
+    indented: bool,
+) -> &'a str {
+    let branch = (indented && !custom_label)
+        .then_some(branch)
         .flatten()
         .map(|branch| branch.strip_prefix("worktree/").unwrap_or(branch));
     // The fallback, for a workspace with no label at all, stays English
     // while other areas borrow the label as `&str`.
     // i18n: data
-    first_text([branch, Some(&workspace.label)], "workspace")
+    first_text([branch, Some(label)], "workspace")
 }
 
 /// Collapsed groups show their most urgent member's status.
 pub(super) fn displayed_workspace_status(
-    workspaces: &[ClientShellWorkspace],
-    agents: &[ClientShellAgent],
-    workspace: &ClientShellWorkspace,
+    workspaces: &[Workspace],
+    agents: &[Agent],
+    workspace: &Workspace,
     collapsed: &HashSet<String>,
     priority: &[AgentStatus],
 ) -> AgentStatus {
@@ -186,7 +203,7 @@ pub(super) fn displayed_workspace_status(
     let Some(worktree) = workspace
         .worktree
         .as_ref()
-        .filter(|worktree| !worktree.is_linked_worktree)
+        .filter(|worktree| !worktree.linked)
     else {
         return status;
     };
@@ -209,48 +226,48 @@ pub(super) fn displayed_workspace_status(
 /// The expanded sidebar keeps the base inline gate for the default order.
 /// A custom order uses agent statuses even when inline rows are hidden.
 pub(super) fn displayed_sidebar_workspace_status(
-    workspaces: &[ClientShellWorkspace],
-    agents: &[ClientShellAgent],
-    workspace: &ClientShellWorkspace,
+    workspaces: &[Workspace],
+    agents: &[Agent],
+    workspace: &Workspace,
     collapsed: &HashSet<String>,
     inline: bool,
     priority: &[AgentStatus],
 ) -> AgentStatus {
     if !inline && priority == crate::config::DEFAULT_STATUS_PRIORITY {
-        return workspace.agent_status;
+        return workspace.status;
     }
     displayed_workspace_status(workspaces, agents, workspace, collapsed, priority)
 }
 
 /// The compact rail uses collapsed-group rollups only for custom orders.
 pub(super) fn rail_workspace_status(
-    workspaces: &[ClientShellWorkspace],
-    agents: &[ClientShellAgent],
-    workspace: &ClientShellWorkspace,
+    workspaces: &[Workspace],
+    agents: &[Agent],
+    workspace: &Workspace,
     collapsed: &HashSet<String>,
     priority: &[AgentStatus],
 ) -> AgentStatus {
     if priority != crate::config::DEFAULT_STATUS_PRIORITY {
         displayed_workspace_status(workspaces, agents, workspace, collapsed, priority)
     } else {
-        workspace.agent_status
+        workspace.status
     }
 }
 
 /// The status a workspace shows. The default order keeps the daemon status;
-/// custom orders use this workspace's matching snapshot agents.
+/// custom orders use this workspace's matching session agents.
 pub(super) fn workspace_status(
-    workspace: &ClientShellWorkspace,
-    agents: &[ClientShellAgent],
+    workspace: &Workspace,
+    agents: &[Agent],
     priority: &[AgentStatus],
 ) -> AgentStatus {
     if priority == crate::config::DEFAULT_STATUS_PRIORITY {
-        return workspace.agent_status;
+        return workspace.status;
     }
     agents
         .iter()
-        .filter(|agent| agent.workspace_id == workspace.workspace_id)
-        .map(|agent| agent.agent_status)
+        .filter(|agent| agent.workspace == workspace.id)
+        .map(|agent| agent.status)
         .max_by_key(|status| status_priority(*status, priority))
-        .unwrap_or(workspace.agent_status)
+        .unwrap_or(workspace.status)
 }

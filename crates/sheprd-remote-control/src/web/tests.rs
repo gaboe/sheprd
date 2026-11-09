@@ -16,11 +16,14 @@ use tower::ServiceExt;
 mod apps;
 mod attention;
 mod changes;
+mod convert;
 #[cfg(unix)]
 mod echo;
+mod empty_core;
 mod handoff;
 mod hosts;
 mod indicators;
+mod layout;
 mod nearby;
 mod origins;
 mod pace;
@@ -29,6 +32,7 @@ mod presence;
 mod pull_requests;
 mod rename;
 mod routes;
+mod service_worker;
 mod stream;
 #[cfg(unix)]
 mod streaming;

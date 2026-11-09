@@ -26,6 +26,8 @@ pub(crate) enum Page {
     AppUpdate,
     /// Approving an automation script, or enabling automations on a host.
     Automation,
+    /// The account menu's Azure DevOps tokens, beside GitHub's and GitLab's.
+    AzureDevOps,
     /// Reviewing, then following, a move of the pane menu's pane to another
     /// device.
     CarryPane,
@@ -34,6 +36,10 @@ pub(crate) enum Page {
     /// Go to Symbol and Go to File over the focused pane's checkout.
     CodeSearch,
     ConfirmClose,
+    /// A herdr-core tab's or pane's right-click menu.
+    CoreMenu,
+    /// Where a herdr-core pane can move: a new tab, or another tab.
+    CoreMove,
     /// Confirming new cloud machines a command asked for should be made.
     #[cfg(feature = "cloud")]
     CreateCloud,
@@ -74,6 +80,8 @@ pub(crate) enum Page {
     OpenCheckout,
     /// Asks before opening a terminal hyperlink with an unlisted scheme.
     OpenLink,
+    /// A reply to one or several of the Overview's agents.
+    OverviewReply,
     Palette,
     Pane,
     /// The processes under the pane menu's pane.
@@ -96,6 +104,8 @@ pub(crate) enum Page {
     RemoveDevice,
     /// Confirming a saved WSL distribution should be forgotten.
     RemoveWsl,
+    /// Naming a herdr-core tab or pane from its menu.
+    RenameCore,
     RenameDevice,
     RenamePane,
     RenameTab,
@@ -114,6 +124,16 @@ pub(crate) enum Page {
     /// Asks whether to trust a repository's worktree script before it runs.
     WorktreeScript,
     // keep-sorted end
+}
+
+impl Page {
+    /// A tab's menu or rename dialog, Herdr's or a Herdr 2 tab's or pane's.
+    pub(crate) fn is_tab_menu(self) -> bool {
+        matches!(
+            self,
+            Self::Tab | Self::RenameTab | Self::CoreMenu | Self::CoreMove | Self::RenameCore
+        )
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -190,6 +210,47 @@ impl Page {
                 | Self::PrReview
                 | Self::PrComment
                 | Self::PrMerge
+                | Self::CoreMenu
+                | Self::CoreMove
+                | Self::RenameCore
+        )
+    }
+
+    /// Context menus and their dialogs, sized to their rows rather than
+    /// the window.
+    pub(crate) fn context_sized(self) -> bool {
+        matches!(
+            self,
+            Self::Tab
+                | Self::RenameTab
+                | Self::MoveTab
+                | Self::Group
+                | Self::Pane
+                | Self::RenamePane
+                | Self::MovePane
+                | Self::CarryPane
+                | Self::PaneProcesses
+                | Self::KillProcesses
+                | Self::Host
+                | Self::RemoveDevice
+                | Self::RemoveWsl
+                | Self::CoreMenu
+                | Self::CoreMove
+                | Self::RenameCore
+        )
+    }
+
+    /// The Git popover, its dialogs, and the Overview's reply, which share a
+    /// width that follows the window.
+    pub(crate) fn popover_sized(self) -> bool {
+        matches!(
+            self,
+            Self::Git
+                | Self::GitCommit
+                | Self::PrReview
+                | Self::PrComment
+                | Self::PrMerge
+                | Self::OverviewReply
         )
     }
 

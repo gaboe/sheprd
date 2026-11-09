@@ -24,10 +24,11 @@ impl SheprdWindow {
         Some(result)
     }
 
-    /// Writes daemon-forwarded OSC 52 payloads to the pasteboard and reports
+    /// Writes OSC 52 payloads, forwarded by Herdr or read by a herdr-core
+    /// terminal's emulator, to the pasteboard and reports
     /// the copy the way a local selection does. Returns whether anything was
     /// written, so the window repaints for the flash.
-    pub(super) fn apply_clipboard_writes(
+    pub(crate) fn apply_clipboard_writes(
         &mut self,
         writes: impl IntoIterator<Item = String>,
         cx: &mut Context<Self>,
@@ -93,6 +94,7 @@ impl SheprdWindow {
             let endpoints = &self.endpoints;
             avatars.keep_links(|id| endpoints.iter().any(|endpoint| endpoint.id == id));
         }
+        let quiet = self.config.notifications.quiet();
         for (index, endpoint) in self.endpoints.iter_mut().enumerate() {
             let updated = endpoint.poll(Instant::now());
             // Nothing to keep current, or to silence, while nothing is muted.
@@ -115,7 +117,7 @@ impl SheprdWindow {
             // ring, as the TUI drops them from inactive endpoints.
             let bells = std::mem::take(&mut endpoint.live.bells);
             let host_muted = Mutes::any(cx).is_some_and(|mutes| mutes.host(&endpoint.id));
-            if index == self.selected_endpoint && !host_muted {
+            if index == self.selected_endpoint && !quiet && !host_muted {
                 self.bell.queue(bells);
             }
             selected_changed |= index == self.selected_endpoint && updated != Redraw::None;
@@ -131,11 +133,12 @@ impl SheprdWindow {
                 index == self.selected_endpoint && self.active,
                 Instant::now(),
                 |event| {
-                    silenced.notice(
-                        event.workspace_id.as_deref(),
-                        event.tab_id.as_deref(),
-                        event.pane_id.as_deref(),
-                    )
+                    quiet
+                        || silenced.notice(
+                            event.workspace_id.as_deref(),
+                            event.tab_id.as_deref(),
+                            event.pane_id.as_deref(),
+                        )
                 },
             );
             changed = changed.max(updated);
@@ -152,21 +155,20 @@ impl SheprdWindow {
             // sends no new snapshot.
             let now = Instant::now();
             if endpoint.online_since().is_some()
-                && let (Some(avatars), Some(snapshot)) =
-                    (&mut self.avatars, &endpoint.live.snapshot)
+                && let (Some(avatars), Some(session)) = (&mut self.avatars, endpoint.live.session())
                 && (updated == Redraw::Window
                     || matches!(&endpoint.connection.target,
                         ConnectTarget::Ssh { target, .. } if avatars.retry_due(target, now)))
             {
                 let target = &endpoint.connection.target;
-                for workspace in &snapshot.workspaces {
+                for workspace in &session.workspaces {
                     if let Some(checkout) = Checkout::of(index == 0, target, workspace) {
                         avatars.request(checkout, now);
                     }
                 }
                 if let ConnectTarget::Ssh { target: host, .. } = target {
                     avatars.forget_unlisted(host, |dir| {
-                        snapshot.workspaces.iter().any(|workspace| {
+                        session.workspaces.iter().any(|workspace| {
                             matches!(
                                 Checkout::of(index == 0, target, workspace),
                                 Some(Checkout::Ssh { dir: listed, .. }) if listed == dir
